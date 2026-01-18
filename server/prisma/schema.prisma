@@ -3,18 +3,17 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mongodb"
   url      = env("DATABASE_URL")
 }
 
-// Enum Role not supported in SQLite, using String
-// Role: SUPPLIER | EMPLOYEE
-
 model User {
-  id        String   @id @default(uuid())
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
   email     String   @unique
   password  String
   role      String   @default("EMPLOYEE")
+  name      String?
+  avatarUrl String?
   createdAt DateTime @default(now())
 
   supplier  Supplier?
@@ -22,23 +21,23 @@ model User {
 }
 
 model Supplier {
-  id     String @id @default(uuid())
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
   name   String
-  userId String @unique
+  userId String @unique @db.ObjectId
   user   User   @relation(fields: [userId], references: [id])
 
   devices Device[]
 }
 
 model Device {
-  id            String   @id @default(uuid())
-  supplierId    String
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  supplierId    String   @db.ObjectId
   supplier      Supplier @relation(fields: [supplierId], references: [id])
   
   name          String
   brand         String
-  specs         String   // SQLite doesn't support JSON type, storing as stringified JSON
-  basePrice     Decimal
+  specs         String
+  basePrice     Float
   stockQuantity Int      @default(0)
   active        Boolean  @default(true)
   imageUrl      String?
@@ -52,10 +51,10 @@ model Device {
 }
 
 model Offer {
-  id          String   @id @default(uuid())
-  deviceId    String
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  deviceId    String   @db.ObjectId
   device      Device   @relation(fields: [deviceId], references: [id])
-  discount    Decimal
+  discount    Float
   startDate   DateTime
   endDate     DateTime
   
@@ -63,8 +62,8 @@ model Offer {
 }
 
 model StockHistory {
-  id        String   @id @default(uuid())
-  deviceId  String
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  deviceId  String   @db.ObjectId
   device    Device   @relation(fields: [deviceId], references: [id])
   change    Int
   reason    String
@@ -72,12 +71,12 @@ model StockHistory {
 }
 
 model Lease {
-  id        String   @id @default(uuid())
-  deviceId  String
-  device    Device   @relation(fields: [deviceId], references: [id])
-  userId    String   // Employee
-  user      User     @relation(fields: [userId], references: [id])
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  deviceId     String   @db.ObjectId
+  device       Device   @relation(fields: [deviceId], references: [id])
+  userId       String   @db.ObjectId
+  user         User     @relation(fields: [userId], references: [id])
   
-  leaseDate DateTime @default(now())
-  priceAtLease Decimal
+  leaseDate    DateTime @default(now())
+  priceAtLease Float
 }

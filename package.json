@@ -5,6 +5,7 @@
     "scripts": {
         "install:all": "npm install && cd server && npm install && cd ../client && npm install",
         "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+        "build": "cd client && npm install && npm run build",
         "db:migrate": "cd server && npx prisma migrate dev --name init"
     },
     "devDependencies": {

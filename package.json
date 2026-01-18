@@ -5,8 +5,9 @@
     "scripts": {
         "install:all": "npm install && cd server && npm install && cd ../client && npm install",
         "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
-        "build": "cd client && npm install && npm run build",
-        "db:migrate": "cd server && npx prisma migrate dev --name init"
+        "build": "cd client && npm install && npm run build && cd .. && rm -rf public && mv client/dist public",
+        "db:migrate": "cd server && npx prisma migrate dev --name init",
+        "postinstall": "cd server && npm install"
     },
     "devDependencies": {
         "concurrently": "^8.2.0"

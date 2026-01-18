@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Enum Role not supported in SQLite, using String
+// Role: SUPPLIER | EMPLOYEE
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  role      String   @default("EMPLOYEE")
+  createdAt DateTime @default(now())
+
+  supplier  Supplier?
+  leases    Lease[]
+}
+
+model Supplier {
+  id     String @id @default(uuid())
+  name   String
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  devices Device[]
+}
+
+model Device {
+  id            String   @id @default(uuid())
+  supplierId    String
+  supplier      Supplier @relation(fields: [supplierId], references: [id])
+  
+  name          String
+  brand         String
+  specs         String   // SQLite doesn't support JSON type, storing as stringified JSON
+  basePrice     Decimal
+  stockQuantity Int      @default(0)
+  active        Boolean  @default(true)
+  imageUrl      String?
+
+  offers       Offer[]
+  stockHistory StockHistory[]
+  leases       Lease[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Offer {
+  id          String   @id @default(uuid())
+  deviceId    String
+  device      Device   @relation(fields: [deviceId], references: [id])
+  discount    Decimal
+  startDate   DateTime
+  endDate     DateTime
+  
+  createdAt   DateTime @default(now())
+}
+
+model StockHistory {
+  id        String   @id @default(uuid())
+  deviceId  String
+  device    Device   @relation(fields: [deviceId], references: [id])
+  change    Int
+  reason    String
+  createdAt DateTime @default(now())
+}
+
+model Lease {
+  id        String   @id @default(uuid())
+  deviceId  String
+  device    Device   @relation(fields: [deviceId], references: [id])
+  userId    String   // Employee
+  user      User     @relation(fields: [userId], references: [id])
+  
+  leaseDate DateTime @default(now())
+  priceAtLease Decimal
+}

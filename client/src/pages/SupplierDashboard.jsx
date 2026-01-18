@@ -1,328 +1,219 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { supplierApi } from '../services/api';
-import { useAuth } from '../context/AuthContext';
+import Layout from '../components/Layout';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import { Plus, Edit2, Package, Box, Percent, TrendingUp, AlertTriangle } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 export default function SupplierDashboard() {
-    const { user, logout } = useAuth();
     const [devices, setDevices] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-    // UI State
-    const [showAddForm, setShowAddForm] = useState(false);
-    const [editingDevice, setEditingDevice] = useState(null);
-    const [offeringDevice, setOfferingDevice] = useState(null);
-
-    // Form State
-    const [deviceForm, setDeviceForm] = useState({
-        name: '', brand: '', basePrice: '', stockQuantity: '', imageUrl: '', active: true
-    });
-    // New state for Key-Value Specs
-    const [specsKV, setSpecsKV] = useState([{ key: '', value: '' }]);
-
-    const [offerForm, setOfferForm] = useState({
-        discount: '', startDate: '', endDate: ''
-    });
-
-    useEffect(() => {
-        loadDevices();
-    }, []);
-
-    const loadDevices = async () => {
+    const loadDevices = useCallback(async () => {
         try {
+            setLoading(true);
             const { data } = await supplierApi.getDevices();
             setDevices(data);
         } catch (error) {
             console.error('Failed to load devices', error);
+        } finally {
+            setLoading(false);
         }
-    };
+    }, []);
 
-    const handleSaveDevice = async (e) => {
-        e.preventDefault();
+    useEffect(() => {
+        loadDevices();
+    }, [loadDevices]);
 
-        // Convert KV array to Object
-        const specsObj = specsKV.reduce((acc, item) => {
-            if (item.key.trim()) {
-                acc[item.key.trim()] = item.value.trim();
-            }
-            return acc;
-        }, {});
-
-        try {
-            const payload = {
-                ...deviceForm,
-                specs: specsObj,
-                basePrice: parseFloat(deviceForm.basePrice),
-                stockQuantity: parseInt(deviceForm.stockQuantity),
-                active: deviceForm.active
-            };
-
-            if (editingDevice) {
-                await supplierApi.updateDevice(editingDevice.id, payload);
-            } else {
-                await supplierApi.createDevice(payload);
-            }
-
-            closeForms();
-            loadDevices();
-        } catch (error) {
-            alert('Error saving device: ' + error.message);
-        }
-    };
-
-    const handleCreateOffer = async (e) => {
-        e.preventDefault();
-        try {
-            await supplierApi.createOffer(offeringDevice.id, {
-                discount: parseFloat(offerForm.discount),
-                startDate: offerForm.startDate,
-                endDate: offerForm.endDate
-            });
-            closeForms();
-            loadDevices();
-            alert('Offer created successfully!');
-        } catch (error) {
-            alert('Error creating offer: ' + error.message);
-        }
-    };
-
-    const handleUpdateStock = async (id, currentQty) => {
-        const newQty = prompt("Enter new TOTAL stock quantity:", currentQty);
-        if (newQty !== null) {
-            try {
-                await supplierApi.updateStock(id, parseInt(newQty));
-                loadDevices();
-            } catch (error) {
-                alert('Error updating stock');
-            }
-        }
-    };
-
-    const startEdit = (device) => {
-        setEditingDevice(device);
-        setDeviceForm({
-            name: device.name,
-            brand: device.brand,
-            basePrice: device.basePrice,
-            stockQuantity: device.stockQuantity,
-            imageUrl: device.imageUrl || '',
-            active: device.active
-        });
-
-        // Parse existing specs into KV array
-        let initialKV = [];
-        if (device.specs && Object.keys(device.specs).length > 0) {
-            initialKV = Object.entries(device.specs).map(([key, value]) => ({ key, value }));
-        } else {
-            initialKV = [{ key: '', value: '' }];
-        }
-        setSpecsKV(initialKV);
-
-        setShowAddForm(true);
-        setOfferingDevice(null);
-    };
-
-    const startAdd = () => {
-        setEditingDevice(null);
-        setDeviceForm({ name: '', brand: '', basePrice: '', stockQuantity: '', imageUrl: '', active: true });
-        setSpecsKV([{ key: '', value: '' }]); // Reset KV
-        setShowAddForm(true);
-        setOfferingDevice(null);
-    };
-
-    const closeForms = () => {
-        setShowAddForm(false);
-        setEditingDevice(null);
-        setOfferingDevice(null);
-        setOfferForm({ discount: '', startDate: '', endDate: '' });
+    // Calculate stats
+    const stats = {
+        total: devices.length,
+        active: devices.filter(d => d.active).length,
+        lowStock: devices.filter(d => d.stockQuantity < 5).length,
     };
 
     return (
-        <div className="min-h-screen bg-gray-100">
-            <nav className="bg-white shadow">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between h-16">
-                        <div className="flex items-center">
-                            <h1 className="text-xl font-bold">Supplier Dashboard - {user.name}</h1>
+        <Layout title="Dashboard" backgroundVariant="supplier">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all duration-300"
+                >
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="p-3 bg-violet-500/20 rounded-xl">
+                            <Package className="w-6 h-6 text-violet-400" />
                         </div>
-                        <div className="flex items-center">
-                            <button onClick={logout} className="text-gray-500 hover:text-gray-700">Logout</button>
-                        </div>
+                        <Badge variant="primary" size="sm">Total</Badge>
                     </div>
+                    <h3 className="text-3xl font-bold text-white mb-1">{stats.total}</h3>
+                    <p className="text-sm text-slate-400">Total Devices</p>
+                </motion.div>
+
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                    className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all duration-300"
+                >
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="p-3 bg-emerald-500/20 rounded-xl">
+                            <TrendingUp className="w-6 h-6 text-emerald-400" />
+                        </div>
+                        <Badge variant="success" size="sm">Active</Badge>
+                    </div>
+                    <h3 className="text-3xl font-bold text-white mb-1">{stats.active}</h3>
+                    <p className="text-sm text-slate-400">Active Listings</p>
+                </motion.div>
+
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                    className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all duration-300"
+                >
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="p-3 bg-amber-500/20 rounded-xl">
+                            <AlertTriangle className="w-6 h-6 text-amber-400" />
+                        </div>
+                        <Badge variant="warning" size="sm">Alert</Badge>
+                    </div>
+                    <h3 className="text-3xl font-bold text-white mb-1">{stats.lowStock}</h3>
+                    <p className="text-sm text-slate-400">Low Stock Items</p>
+                </motion.div>
+            </div>
+
+            {/* Header */}
+            <div className="flex justify-between items-center mb-8">
+                <div>
+                    <h2 className="text-2xl font-heading font-bold text-white mb-1">My Listings</h2>
+                    <p className="text-slate-400">Manage your device inventory</p>
                 </div>
-            </nav>
+                <Link to="/supplier/device/new">
+                    <Button size="md">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Device
+                    </Button>
+                </Link>
+            </div>
 
-            <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-                <div className="px-4 py-6 sm:px-0">
-                    <div className="flex justify-between mb-4">
-                        <h2 className="text-2xl font-bold text-gray-900">My Listings</h2>
-                        {!showAddForm && !offeringDevice && (
-                            <button
-                                onClick={startAdd}
-                                className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700"
-                            >
-                                Add Device
-                            </button>
-                        )}
-                    </div>
-
-                    {/* Device Form (Create/Edit) */}
-                    {showAddForm && (
-                        <div className="bg-white p-6 rounded-lg shadow mb-6">
-                            <h3 className="text-lg font-medium mb-4">{editingDevice ? 'Edit Device' : 'Add New Device'}</h3>
-                            <form onSubmit={handleSaveDevice} className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                                <input className="border p-2 rounded" placeholder="Device Name" value={deviceForm.name} onChange={e => setDeviceForm({ ...deviceForm, name: e.target.value })} required />
-                                <input className="border p-2 rounded" placeholder="Brand" value={deviceForm.brand} onChange={e => setDeviceForm({ ...deviceForm, brand: e.target.value })} required />
-                                <input className="border p-2 rounded" placeholder="Base Price ($)" type="number" step="0.01" value={deviceForm.basePrice} onChange={e => setDeviceForm({ ...deviceForm, basePrice: e.target.value })} required />
-                                <input className="border p-2 rounded" placeholder="Stock Quantity" type="number" value={deviceForm.stockQuantity} onChange={e => setDeviceForm({ ...deviceForm, stockQuantity: e.target.value })} required />
-                                <div className="sm:col-span-2">
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Specifications</label>
-                                    {specsKV.map((spec, index) => (
-                                        <div key={index} className="flex space-x-2 mb-2">
-                                            <input
-                                                className="border p-2 rounded flex-1"
-                                                placeholder="Key (e.g. Color)"
-                                                value={spec.key}
-                                                onChange={e => {
-                                                    const newSpecs = [...specsKV];
-                                                    newSpecs[index].key = e.target.value;
-                                                    setSpecsKV(newSpecs);
-                                                }}
-                                            />
-                                            <input
-                                                className="border p-2 rounded flex-1"
-                                                placeholder="Value (e.g. Red)"
-                                                value={spec.value}
-                                                onChange={e => {
-                                                    const newSpecs = [...specsKV];
-                                                    newSpecs[index].value = e.target.value;
-                                                    setSpecsKV(newSpecs);
-                                                }}
-                                            />
-                                            {specsKV.length > 1 && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        const newSpecs = specsKV.filter((_, i) => i !== index);
-                                                        setSpecsKV(newSpecs);
-                                                    }}
-                                                    className="px-3 py-2 bg-red-100 text-red-600 rounded hover:bg-red-200"
-                                                >
-                                                    Remove
-                                                </button>
-                                            )}
-                                        </div>
-                                    ))}
-                                    <button
-                                        type="button"
-                                        onClick={() => setSpecsKV([...specsKV, { key: '', value: '' }])}
-                                        className="mt-1 text-sm text-indigo-600 hover:text-indigo-800"
-                                    >
-                                        + Add Spec
-                                    </button>
-                                </div>
-                                <input className="border p-2 rounded sm:col-span-2" placeholder="Image URL" value={deviceForm.imageUrl} onChange={e => setDeviceForm({ ...deviceForm, imageUrl: e.target.value })} />
-                                <div className="sm:col-span-2 flex items-center">
-                                    <input
-                                        type="checkbox"
-                                        id="active"
-                                        checked={deviceForm.active}
-                                        onChange={e => setDeviceForm({ ...deviceForm, active: e.target.checked })}
-                                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                                    />
-                                    <label htmlFor="active" className="ml-2 block text-sm text-gray-900">
-                                        Make Available (Visible to Employees)
-                                    </label>
-                                </div>
-                                <div className="col-span-2 flex justify-end space-x-3">
-                                    <button type="button" onClick={closeForms} className="px-4 py-2 border rounded text-gray-700 hover:bg-gray-50">Cancel</button>
-                                    <button type="submit" className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">{editingDevice ? 'Update' : 'Create'}</button>
-                                </div>
-                            </form>
+            {/* Device List */}
+            {loading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[1, 2, 3].map((i) => (
+                        <div key={i} className="animate-pulse">
+                            <div className="bg-white/5 rounded-2xl p-6 h-96" />
                         </div>
-                    )}
+                    ))}
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {devices.map((device, index) => (
+                        <motion.div
+                            key={device.id}
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: index * 0.1 }}
+                        >
+                            <Card className="group hover:border-primary-500/30 transition-all duration-300 relative overflow-hidden h-full flex flex-col">
+                                {/* Status Badge */}
+                                <div className="absolute top-4 right-4 z-10 flex gap-2">
+                                    {!device.active && (
+                                        <Badge variant="default" size="sm">
+                                            Inactive
+                                        </Badge>
+                                    )}
+                                    {device.stockQuantity < 5 && device.active && (
+                                        <Badge variant="warning" size="sm">
+                                            Low Stock
+                                        </Badge>
+                                    )}
+                                </div>
 
-                    {/* Offer Form */}
-                    {offeringDevice && (
-                        <div className="bg-white p-6 rounded-lg shadow mb-6 border-2 border-indigo-100">
-                            <h3 className="text-lg font-medium mb-4">Add Offer for {offeringDevice.name}</h3>
-                            <form onSubmit={handleCreateOffer} className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-                                <div className="sm:col-span-1">
-                                    <label className="block text-sm font-medium text-gray-700">Discount Amount ($)</label>
-                                    <input className="mt-1 block w-full border p-2 rounded" type="number" step="0.01" value={offerForm.discount} onChange={e => setOfferForm({ ...offerForm, discount: e.target.value })} required />
+                                {/* Image */}
+                                <div className="aspect-video w-full bg-gradient-to-br from-slate-900/50 to-slate-800/30 rounded-xl mb-4 flex items-center justify-center overflow-hidden border border-white/5 relative">
+                                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                                    {device.imageUrl ? (
+                                        <img src={device.imageUrl} alt={device.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                    ) : (
+                                        <Package className="w-16 h-16 text-slate-600" />
+                                    )}
                                 </div>
-                                <div className="sm:col-span-1">
-                                    <label className="block text-sm font-medium text-gray-700">Start Date</label>
-                                    <input className="mt-1 block w-full border p-2 rounded" type="date" value={offerForm.startDate} onChange={e => setOfferForm({ ...offerForm, startDate: e.target.value })} required />
-                                </div>
-                                <div className="sm:col-span-1">
-                                    <label className="block text-sm font-medium text-gray-700">End Date</label>
-                                    <input className="mt-1 block w-full border p-2 rounded" type="date" value={offerForm.endDate} onChange={e => setOfferForm({ ...offerForm, endDate: e.target.value })} required />
-                                </div>
-                                <div className="col-span-3 flex justify-end space-x-3">
-                                    <button type="button" onClick={closeForms} className="px-4 py-2 border rounded text-gray-700 hover:bg-gray-50">Cancel</button>
-                                    <button type="submit" className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">Create Offer</button>
-                                </div>
-                            </form>
-                        </div>
-                    )}
 
-                    {/* Device List */}
-                    <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                        <ul className="divide-y divide-gray-200">
-                            {devices.map((device) => (
-                                <li key={device.id} className={`p-4 flex flex-col sm:flex-row justify-between items-center hover:bg-gray-50 ${!device.active ? 'bg-gray-100 opacity-75' : ''}`}>
-                                    <div className="mb-4 sm:mb-0">
-                                        <div className="flex items-center">
-                                            <h3 className="text-lg font-medium text-indigo-600">{device.name}</h3>
-                                            <span className="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                                                {device.brand}
-                                            </span>
-                                            {!device.active && (
-                                                <span className="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-600 text-white">
-                                                    Inactive
-                                                </span>
-                                            )}
+                                {/* Content */}
+                                <div className="mb-4 flex-grow">
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div className="flex-1">
+                                            <h3 className="text-lg font-bold text-white group-hover:text-primary-300 transition-colors line-clamp-1">
+                                                {device.name}
+                                            </h3>
+                                            <p className="text-sm text-slate-400">{device.brand}</p>
                                         </div>
-                                        <p className="text-sm text-gray-500">Stock: {device.stockQuantity} | Base Price: ${device.basePrice}</p>
-
-                                        {/* Display Active Offers if any */}
-                                        {device.offers && device.offers.length > 0 && (
-                                            <div className="mt-1 text-xs text-purple-600">
-                                                {device.offers.length} Offer(s) active
-                                            </div>
-                                        )}
+                                        <Badge variant="primary" size="lg" className="ml-2">
+                                            ${device.basePrice}
+                                        </Badge>
                                     </div>
-                                    <div className="flex space-x-2">
-                                        <button
-                                            onClick={() => startEdit(device)}
-                                            className="px-3 py-1 border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50"
-                                        >
+
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <Box className="w-4 h-4 text-slate-400" />
+                                        <span className={device.stockQuantity < 5 ? 'text-amber-400 font-medium' : 'text-slate-400'}>
+                                            Stock: {device.stockQuantity}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Actions */}
+                                <div className="flex gap-2 pt-4 border-t border-white/10">
+                                    <Link to={`/supplier/device/${device.id}/edit`} className="flex-1">
+                                        <Button variant="outline" size="sm" className="w-full">
+                                            <Edit2 className="w-3 h-3 mr-1" />
                                             Edit
-                                        </button>
-                                        <button
-                                            onClick={() => handleUpdateStock(device.id, device.stockQuantity)}
-                                            className="px-3 py-1 border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50"
-                                        >
+                                        </Button>
+                                    </Link>
+                                    <Link to={`/supplier/device/${device.id}/stock`} className="flex-1">
+                                        <Button variant="outline" size="sm" className="w-full">
+                                            <Box className="w-3 h-3 mr-1" />
                                             Stock
-                                        </button>
-                                        <button
-                                            onClick={() => { setOfferingDevice(device); setShowAddForm(false); }}
-                                            className="px-3 py-1 border border-transparent rounded text-sm font-medium text-white bg-purple-600 hover:bg-purple-700"
-                                        >
-                                            Add Offer
-                                        </button>
-                                    </div>
-                                </li>
-                            ))}
-                            {devices.length === 0 && (
-                                <li className="p-10 text-center text-gray-500">
-                                    No devices yet. Click "Add Device" to start.
-                                </li>
-                            )}
-                        </ul>
-                    </div>
+                                        </Button>
+                                    </Link>
+                                    <Link to={`/supplier/device/${device.id}/offer`} className="flex-1">
+                                        <Button size="sm" className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 border-0">
+                                            <Percent className="w-3 h-3 mr-1" />
+                                            Offer
+                                        </Button>
+                                    </Link>
+                                </div>
+                            </Card>
+                        </motion.div>
+                    ))}
                 </div>
-            </main>
-        </div>
+            )}
+
+            {/* Empty State */}
+            {!loading && devices.length === 0 && (
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="col-span-full py-16 text-center"
+                >
+                    <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-white/5 mb-6 backdrop-blur-sm border border-white/10">
+                        <Package className="w-10 h-10 text-slate-500" />
+                    </div>
+                    <h3 className="text-xl font-medium text-slate-300 mb-2">No devices yet</h3>
+                    <p className="text-slate-500 mb-6">Start by adding your first device listing</p>
+                    <Link to="/supplier/device/new">
+                        <Button>
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add Your First Device
+                        </Button>
+                    </Link>
+                </motion.div>
+            )}
+        </Layout>
     );
 }

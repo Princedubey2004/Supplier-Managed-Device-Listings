@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
-import axios from 'axios';
+import api from '../../services/api';
 import { X, User, Save, Upload } from 'lucide-react';
 
 const ProfileModal = ({ isOpen, onClose }) => {
@@ -18,7 +18,7 @@ const ProfileModal = ({ isOpen, onClose }) => {
 
         try {
             // In a real app, you might upload the file here or just send the URL
-            const { data } = await axios.put('http://localhost:3000/api/auth/profile', {
+            const { data } = await api.put('/auth/profile', {
                 name,
                 avatarUrl
             });

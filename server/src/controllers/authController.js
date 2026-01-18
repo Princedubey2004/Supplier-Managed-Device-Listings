@@ -12,28 +12,38 @@ const register = async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Transaction to ensure Supplier is created if role is SUPPLIER
-        const result = await prisma.$transaction(async (tx) => {
-            const user = await tx.user.create({
-                data: {
-                    email,
-                    password: hashedPassword,
-                    role,
-                },
-            });
+        // 1. Create User
+        const user = await prisma.user.create({
+            data: {
+                email,
+                password: hashedPassword,
+                role,
+                name: name || undefined, // Save name if provided
+            },
+        });
 
-            if (role === 'SUPPLIER') {
-                if (!name) throw new Error('Supplier name is required');
-                await tx.supplier.create({
+        // 2. Create Supplier if needed
+        if (role === 'SUPPLIER') {
+            if (!name) {
+                // Rollback: Delete user if supplier validation fails
+                await prisma.user.delete({ where: { id: user.id } });
+                throw new Error('Supplier name is required');
+            }
+            try {
+                await prisma.supplier.create({
                     data: {
                         name,
                         userId: user.id,
                     },
                 });
+            } catch (supplierError) {
+                // Rollback: Delete user if supplier creation fails
+                await prisma.user.delete({ where: { id: user.id } });
+                throw supplierError;
             }
+        }
 
-            return user;
-        });
+        const result = user;
 
         res.status(201).json({ message: 'User created successfully', userId: result.id });
     } catch (error) {
@@ -66,7 +76,8 @@ const login = async (req, res) => {
                 id: user.id,
                 email: user.email,
                 role: user.role,
-                name: user.supplier?.name || user.email,
+                name: user.name || user.supplier?.name || user.email, // Prefer user.name, fallback to supplier name or email
+                avatarUrl: user.avatarUrl,
                 supplierId: user.supplier?.id,
             },
         });
@@ -75,4 +86,32 @@ const login = async (req, res) => {
     }
 };
 
-module.exports = { register, login };
+const updateProfile = async (req, res) => {
+    const { userId } = req.user; // From middleware
+    const { name, avatarUrl } = req.body;
+
+    try {
+        const updatedUser = await prisma.user.update({
+            where: { id: userId },
+            data: {
+                name,
+                avatarUrl,
+            },
+        });
+
+        res.json({
+            message: 'Profile updated successfully',
+            user: {
+                id: updatedUser.id,
+                email: updatedUser.email,
+                role: updatedUser.role,
+                name: updatedUser.name,
+                avatarUrl: updatedUser.avatarUrl,
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+module.exports = { register, login, updateProfile };

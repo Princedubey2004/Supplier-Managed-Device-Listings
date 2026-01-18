@@ -63,63 +63,78 @@ const leaseDevice = async (req, res) => {
     const { userId } = req.user; // Employee ID
 
     try {
-        const result = await prisma.$transaction(async (tx) => {
-            // Lock device row? Prisma handles optimistic concurrency, or we can just check.
-            // For strict atomicity, a raw query or updating count with logic is better.
-            // updateMany with where quantity > 0 returns count.
+        // Transaction removed for local MongoDB standalone support
 
-            // 1. Check/Update Stock
-            const device = await tx.device.findUnique({ where: { id } });
-            if (!device || !device.active) throw new Error('Device not available');
-            if (device.stockQuantity <= 0) throw new Error('Out of stock');
+        // 1. Check/Update Stock
+        const device = await prisma.device.findUnique({ where: { id } });
+        if (!device || !device.active) throw new Error('Device not available');
+        if (device.stockQuantity <= 0) throw new Error('Out of stock');
 
-            const updated = await tx.device.update({
+        // Optimistic update: Decrement stock
+        const updated = await prisma.device.update({
+            where: { id },
+            data: { stockQuantity: { decrement: 1 } },
+        });
+
+        if (updated.stockQuantity < 0) {
+            // Revert update if stock accidentally went below 0 (though we checked before)
+            // This is a basic race condition check
+            await prisma.device.update({
                 where: { id },
-                data: { stockQuantity: { decrement: 1 } },
+                data: { stockQuantity: { increment: 1 } },
             });
+            throw new Error('Race condition: Out of stock');
+        }
 
-            if (updated.stockQuantity < 0) {
-                throw new Error('Race condition: Out of stock'); // Start over if this happens theoretically
-            }
+        // Calculate price at lease
+        const activeOffer = await prisma.offer.findFirst({
+            where: {
+                deviceId: id,
+                startDate: { lte: new Date() },
+                endDate: { gte: new Date() },
+            },
+            orderBy: { discount: 'desc' },
+        });
 
-            // Calculate price at lease
-            // Need to fetch active offers again within transaction to be sure of price?
-            // For now, base price * discount.
-            // Ideally we re-fetch offers here.
-            const activeOffer = await tx.offer.findFirst({
-                where: {
-                    deviceId: id,
-                    startDate: { lte: new Date() },
-                    endDate: { gte: new Date() },
-                },
-                orderBy: { discount: 'desc' },
-            });
+        let price = parseFloat(device.basePrice);
+        if (activeOffer) {
+            price = price * (1 - parseFloat(activeOffer.discount) / 100);
+        }
 
-            let price = parseFloat(device.basePrice);
-            if (activeOffer) {
-                price = price * (1 - parseFloat(activeOffer.discount) / 100);
-            }
-
-            // 2. Create Lease
-            const lease = await tx.lease.create({
+        // 2. Create Lease
+        // If this fails, we should ideally revert the stock update.
+        let lease;
+        try {
+            lease = await prisma.lease.create({
                 data: {
                     deviceId: id,
                     userId,
                     priceAtLease: price,
                 },
             });
+        } catch (leaseError) {
+            await prisma.device.update({
+                where: { id },
+                data: { stockQuantity: { increment: 1 } },
+            });
+            throw leaseError;
+        }
 
-            // 3. Stock History
-            await tx.stockHistory.create({
+        // 3. Stock History
+        try {
+            await prisma.stockHistory.create({
                 data: {
                     deviceId: id,
                     change: -1,
                     reason: `Leased by Employee ${userId}`,
                 },
             });
+        } catch (historyError) {
+            // Non-critical, just log it. Data consistency for history is secondary to lease creation.
+            console.error('Failed to create stock history:', historyError);
+        }
 
-            return lease;
-        });
+        const result = lease;
 
         res.status(201).json(result);
     } catch (error) {

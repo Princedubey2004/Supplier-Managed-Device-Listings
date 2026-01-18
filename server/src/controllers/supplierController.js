@@ -29,9 +29,9 @@ const createDevice = async (req, res) => {
                 supplierId,
                 name,
                 brand,
-                specs: JSON.stringify(specs || {}), // SQLite stores as string
-                basePrice,
-                stockQuantity,
+                specs: JSON.stringify(specs || {}),
+                basePrice: parseFloat(basePrice),
+                stockQuantity: parseInt(stockQuantity, 10),
                 imageUrl,
             },
         });
@@ -53,12 +53,18 @@ const updateDevice = async (req, res) => {
             return res.status(403).json({ error: 'Access denied' });
         }
 
+        const updateData = {
+            ...data,
+            specs: data.specs ? JSON.stringify(data.specs || {}) : undefined
+        };
+
+        // Convert numeric fields if present
+        if (data.basePrice !== undefined) updateData.basePrice = parseFloat(data.basePrice);
+        if (data.stockQuantity !== undefined) updateData.stockQuantity = parseInt(data.stockQuantity, 10);
+
         const updated = await prisma.device.update({
             where: { id },
-            data: {
-                ...data,
-                specs: data.specs ? JSON.stringify(data.specs || {}) : undefined
-            },
+            data: updateData,
         });
         res.json(updated);
     } catch (error) {
@@ -69,11 +75,7 @@ const updateDevice = async (req, res) => {
 const updateStock = async (req, res) => {
     const { id } = req.params;
     const { supplierId } = req.user;
-    const { quantity, reason } = req.body; // New total quantity? Or change? Prompt says "Update stock quantity" and "Stock history tracking"
-
-    // If quantity is absolute value, calculate change.
-    // If change, just apply.
-    // Let's assume input is New Total Quantity for simplicity in UI, but we record change.
+    const { quantity, reason } = req.body;
 
     try {
         const device = await prisma.device.findUnique({ where: { id } });
@@ -81,12 +83,13 @@ const updateStock = async (req, res) => {
             return res.status(403).json({ error: 'Access denied' });
         }
 
-        const change = quantity - device.stockQuantity;
+        const newQuantity = parseInt(quantity, 10);
+        const change = newQuantity - device.stockQuantity;
 
         const [updatedDevice] = await prisma.$transaction([
             prisma.device.update({
                 where: { id },
-                data: { stockQuantity: quantity },
+                data: { stockQuantity: newQuantity },
             }),
             prisma.stockHistory.create({
                 data: {
@@ -117,7 +120,7 @@ const createOffer = async (req, res) => {
         const offer = await prisma.offer.create({
             data: {
                 deviceId: id,
-                discount,
+                discount: parseFloat(discount),
                 startDate: new Date(startDate),
                 endDate: new Date(endDate),
             },

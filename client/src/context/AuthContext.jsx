@@ -1,22 +1,27 @@
-
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect } from 'react';
 import { authApi } from '../services/api';
+import axios from 'axios'; // Added axios import
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
-    const [token, setToken] = useState(localStorage.getItem('token'));
+    const [user, setUser] = useState(() => {
+        const storedUser = localStorage.getItem('user');
+        return storedUser ? JSON.parse(storedUser) : null;
+    });
+    const [token, setToken] = useState(localStorage.getItem('token') || '');
 
     useEffect(() => {
         if (token) {
-            // Ideally verify token with backend or decode it
-            // For now, we trust local storage or could add a /me endpoint
-            // Let's decode if we have valid user data in localStorage too
-            const storedUser = localStorage.getItem('user');
-            if (storedUser) {
-                setUser(JSON.parse(storedUser));
-            }
+            localStorage.setItem('token', token);
+            axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        } else {
+            localStorage.removeItem('token');
+            delete axios.defaults.headers.common['Authorization'];
+            localStorage.removeItem('user');
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setUser(null);
         }
     }, [token]);
 
@@ -25,7 +30,6 @@ export const AuthProvider = ({ children }) => {
             const { data } = await authApi.login({ email, password });
             setToken(data.token);
             setUser(data.user);
-            localStorage.setItem('token', data.token);
             localStorage.setItem('user', JSON.stringify(data.user));
             return { success: true, role: data.user.role };
         } catch (error) {
@@ -50,8 +54,14 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('user');
     };
 
+    const updateUser = (updatedUserData) => {
+        const newUser = { ...user, ...updatedUserData };
+        setUser(newUser);
+        localStorage.setItem('user', JSON.stringify(newUser));
+    };
+
     return (
-        <AuthContext.Provider value={{ user, token, login, logout, register, isAuthenticated: !!user }}>
+        <AuthContext.Provider value={{ user, token, login, logout, register, updateUser, isAuthenticated: !!user }}>
             {children}
         </AuthContext.Provider>
     );

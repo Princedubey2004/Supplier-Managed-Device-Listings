@@ -66,7 +66,7 @@ const login = async (req, res) => {
 
         const token = jwt.sign(
             { userId: user.id, role: user.role, supplierId: user.supplier?.id },
-            process.env.JWT_SECRET,
+            process.env.JWT_SECRET || 'supersecret_tortoise_key',
             { expiresIn: '1d' }
         );
 
